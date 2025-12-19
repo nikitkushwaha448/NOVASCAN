@@ -1,0 +1,50 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { collectForQuery, getQueueStatus } from '@/lib/services/background-collector';
+
+export const dynamic = 'force-dynamic';
+
+export const POST = async (req: NextRequest) => {
+  try {
+    const body = await req.json();
+    const { query } = body;
+
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'Query is required and must be a non-empty string' },
+        { status: 400 }
+      );
+    }
+
+    const posts = await collectForQuery(query.trim());
+    return NextResponse.json({
+      success: true,
+      message: `Started collection for "${query}"`,
+      collected: posts.length,
+      posts: posts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        url: p.url,
+      })),
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        error: 'Collection failed',
+        message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export const GET = async () => {
+  try {
+    const status = getQueueStatus();
+    return NextResponse.json(status);
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: 'Failed to get queue status' },
+      { status: 500 }
+    );
+  }
+}

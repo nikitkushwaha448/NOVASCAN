@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { analyzeOpportunity } from '@/lib/ai/opportunity-analyzer';
+import type { SocialPost } from '@/lib/types';
+
+export const dynamic = 'force-dynamic';
+
+export const POST = async (req: NextRequest) => {
+  try {
+    const body = await req.json();
+    const { query, posts } = body as { query: string; posts: SocialPost[] };
+
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'Query is required and must be a non-empty string' },
+        { status: 400 }
+      );
+    }
+
+    if (!posts || !Array.isArray(posts) || posts.length === 0) {
+      return NextResponse.json(
+        { error: 'Posts array is required and must not be empty' },
+        { status: 400 }
+      );
+    }
+
+
+    const report = await analyzeOpportunity(query, posts);
+    return NextResponse.json(report);
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        error: 'Failed to analyze opportunity',
+        message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      },
+      { status: 500 }
+    );
+  }
+}
