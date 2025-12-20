@@ -127,15 +127,19 @@ Cost-optimized: Flash handles volume, Pro handles depth.
 
 ---
 
-### 1️⃣ Clone & Install
+### 1. Clone & Install
+
 ```bash
 git clone <your-repo-url>
-cd NOVASCAN
+cd StartupRadar
 npm install
+```
 
-2️⃣ Set Up Environment Variables
+### 2. Set Up Environment Variables
 
-Create a .env file:
+Create `.env`:
+
+```bash
 
 # Google Cloud / Vertex AI
 GOOGLE_CLOUD_PROJECT_ID="your-project-id"
@@ -146,113 +150,102 @@ GOOGLE_APPLICATION_CREDENTIALS="<service-account-json or base64>"
 ELASTIC_CLOUD_ID="your-cloud-id"
 ELASTIC_API_KEY="your-api-key"
 
-# Reddit API
+# Reddit, ProductHunt, HackerNews and Youtube API Keys
 REDDIT_CLIENT_ID=""
+REDDIT_USER_AGENT=""
 REDDIT_CLIENT_SECRET=""
 REDDIT_USER_AGENT=""
-
-# Product Hunt API
 PRODUCTHUNT_CLIENT_ID=""
 PRODUCTHUNT_CLIENT_SECRET=""
 PRODUCTHUNT_API_TOKEN=""
-
-# Hacker News API
 HACKERNEWS_API_URL=""
-
-# YouTube API
 YOUTUBE_API_KEY=""
 
-3️⃣ Authenticate Google Cloud
+```
+
+### 3. Authenticate with Google Cloud
+
+```bash
 gcloud auth application-default login
 gcloud config set project your-project-id
+```
 
+### 4. Set Up Elasticsearch Index
 
-Ensure these APIs are enabled:
-
-Vertex AI API
-
-Discovery Engine API (for reranking)
-
-4️⃣ Set Up Elasticsearch Index
+```bash
 npm run setup-es
+```
 
+This creates the `social_signals` index with mappings for:
 
-Creates social_signals index with:
+- Dense vectors (768 dimensions)
+- Sentiment analysis fields
+- Quality metrics
+- Platform metadata
 
-Dense vectors (768 dimensions)
-
-Sentiment fields
-
-Quality metrics
-
-Platform metadata
-
-5️⃣ (Optional) Enable AI Reranking
+### 5. (Optional) Enable AI Reranking
 
 Prerequisites:
 
-Enable Discovery Engine API
+1. Enable Discovery Engine API in Google Cloud Console
+2. Grant Discovery Engine Viewer role to service account
+3. Wait 2-3 minutes for API propagation
 
-Grant Discovery Engine Viewer role
-
-Wait 2–3 minutes for propagation
-
+```bash
 npm run setup-reranking
+```
 
-6️⃣ Collect Initial Data
+This creates the Vertex AI reranking inference endpoint using Elastic's Open Inference API.
+
+### 6. Collect Initial Data
+
+```bash
 npm run collect-data
+```
 
+Fetches ~100 posts from Reddit, Hacker News, YouTube, Product Hunt and indexes with embeddings. Takes about 5-10 minutes.
 
-Fetches ~100 posts per platform
+### 7. Run the App
 
-Generates embeddings
-
-Indexes into Elasticsearch
-⏱️ Takes 5–10 minutes
-
-7️⃣ Run the App
+```bash
 npm run dev
+```
 
+Open http://localhost:3000
 
-Open 👉 http://localhost:3000
+## Example Use Cases
 
-💡 Example Use Cases
-🔍 Discover Problems
+### Discover Problems
 
-Search:
+```
+Search: "struggling with meeting notes"
+→ Finds 60 discussions about meeting note pain points
+→ Shows trend: Rising 40% in last 30 days
+→ Identifies: Remote teams, managers, consultants
+```
 
-struggling with meeting notes
+### Validate Ideas
 
+```
+Idea: "AI-powered meeting notes with action item extraction"
+→ Market Demand: 85/100 (Strong)
+→ Willingness to Pay: 72/100 (High)
+→ Verdict: BUILD IT
+→ Recommendation: Focus on async teams, $20/mo SaaS
+```
 
-60+ discussions found
+### Find Early Adopters
 
-40% growth in last 30 days
+```
+Opportunity Analysis → Early Adopters Section
+→ Shows top 10 users discussing the problem
+→ Platforms: r/Entrepreneur, r/startups, Hacker News
+→ Engagement levels: 50+ upvotes, 20+ comments
+```
 
-Users: remote teams, managers, consultants
+## Project Structure
 
-✅ Validate Ideas
-
-Idea:
-AI-powered meeting notes with action item extraction
-
-Market Demand: 85 / 100
-
-Willingness to Pay: 72 / 100
-
-Verdict: BUILD IT
-
-Recommendation: $20/month SaaS for async teams
-
-🎯 Find Early Adopters
-
-Top 10 active users discussing the problem
-
-Platforms: r/startups, r/Entrepreneur, Hacker News
-
-High engagement discussions
-
-🗂 Project Structure
-
+```
 NOVASCAN/
 ├── app/
 │   ├── api/
@@ -290,41 +283,47 @@ NOVASCAN/
 │   ├── setup-reranking.ts          # Setup reranking endpoint
 │   └── collect-data.ts             # Data collection job
 └── package.json
+```
 
-Challenges I Faced
+## Challenges I Faced
 
-1.Deduplication turned into a bigger problem than expected. The same discussion often appears multiple times, sometimes with slight title variations or different URLs. I built a normalization system that strips protocols and URL parameters, normalizes titles by removing punctuation and truncating to 100 characters. Even then, some duplicates slip through when titles are significantly reworded.
-2.API rate limits hit hard once I started scaling data collection. YouTube's quota system is particularly brutal—you burn through your daily limit fast. Reddit blocks you if you make requests too quickly. I added delays between requests (1 second for Reddit, 2 seconds for embedding batches) and implemented Promise.allSettled so one platform failure doesn't kill the entire collection job.
-3.Platform-specific quirks created a normalization nightmare. Product Hunt uses GraphQL with nested topic structures (topics.edges[].node.name), Reddit has inconsistent formats where selftext might be empty and timestamps are in Unix seconds, YouTube requires two API calls (search, then fetch details) with engagement metrics as strings needing parsing, and HackerNews has two separate APIs (Firebase and Algolia) with stories that can be deleted or dead. I solved this with a unified SocialPost interface that normalizes everything—YouTube's likeCount and Reddit's score both map to a generic score field, all timestamp formats convert to JavaScript Date objects, and each connector has a normalize function.
+- **Deduplication** turned into a bigger problem than expected. The same discussion often appears multiple times, sometimes with slight title variations or different URLs. I built a normalization system that strips protocols and URL parameters, normalizes titles by removing punctuation and truncating to 100 characters. Even then, some duplicates slip through when titles are significantly reworded.
 
-4.The background collection pipeline needed careful orchestration. Fetching from four platforms, running sentiment analysis, calculating quality scores, generating embeddings, and bulk indexing—all while handling partial failures gracefully. I use Promise.allSettled everywhere, so one platform timeout doesn't break the entire job.
+- **API rate limits** hit hard once I started scaling data collection. YouTube's quota system is particularly brutal—you burn through your daily limit fast. Reddit blocks you if you make requests too quickly. I added delays between requests (1 second for Reddit, 2 seconds for embedding batches) and implemented `Promise.allSettled` so one platform failure doesn't kill the entire collection job.
 
+- **Platform-specific quirks** created a normalization nightmare. **Product Hunt** uses GraphQL with nested topic structures (`topics.edges[].node.name`), **Reddit** has inconsistent formats where `selftext` might be empty and timestamps are in Unix seconds, **YouTube** requires two API calls (search, then fetch details) with engagement metrics as strings needing parsing, and **HackerNews** has two separate APIs (Firebase and Algolia) with stories that can be `deleted` or `dead`. I solved this with a unified **`SocialPost` interface** that normalizes everything—YouTube's `likeCount` and Reddit's `score` both map to a generic `score` field, all timestamp formats convert to JavaScript `Date` objects, and each connector has a `normalize` function.
 
-What's Next
+- **The background collection pipeline** needed careful orchestration. Fetching from four platforms, running sentiment analysis, calculating quality scores, generating embeddings, and bulk indexing—all while handling partial failures gracefully. I use `Promise.allSettled` everywhere, so one platform timeout doesn't break the entire job.
 
-1.Validation API performance - The /api/validate-idea endpoint takes nearly a minute to complete. The main bottleneck is sequential Gemini calls and Elasticsearch searches. Solution: Multi-layer caching. Cache Elasticsearch results for identical search queries (1-hour TTL), cache generated embeddings for common keywords, and cache entire validation reports for identical ideas (6-hour TTL). This could drop response time from 60 seconds to under 2 seconds for cache hits. Redis with query hash keys would handle this cleanly.
-2.Authentication & rate limiting - Currently everything is public with no usage tracking. Adding NextAuth or Clerk would enable user accounts, and token bucket rate limiting per user would prevent abuse.
-3.Better deduplication - The current URL/title normalization still lets duplicates through when titles are significantly reworded. A similarity-based approach using embeddings could catch near-duplicates more effectively.
+## What's Next
 
+- **Validation API performance** - The `/api/validate-idea` endpoint takes nearly a minute to complete. The main bottleneck is sequential Gemini calls and Elasticsearch searches. **Solution: Multi-layer caching.** Cache Elasticsearch results for identical search queries (1-hour TTL), cache generated embeddings for common keywords, and cache entire validation reports for identical ideas (6-hour TTL). This could drop response time from 60 seconds to under 2 seconds for cache hits. Redis with query hash keys would handle this cleanly.
 
-Roadmap
+- **Authentication & rate limiting** - Currently everything is public with no usage tracking. Adding NextAuth or Clerk would enable user accounts, and token bucket rate limiting per user would prevent abuse.
 
- 1.Add more platforms (X, GitHub, Stackoverflow, Quora)
- 2.Multi-layer caching (Redis) for validation API
- 3.Authentication system (NextAuth/Clerk)
- 4.Add export functionality (CSV, PDF reports)
- 5.Multi-lingual support
- 6.Browser extension for on-the-fly validation
+- **Better deduplication** - The current URL/title normalization still lets duplicates through when titles are significantly reworded. A similarity-based approach using embeddings could catch near-duplicates more effectively.
 
-Acknowledgments
+## Roadmap
+
+- [ ] Add more platforms (X, GitHub, Stackoverflow, Quora)
+- [ ] Multi-layer caching (Redis) for validation API
+- [ ] Authentication system (NextAuth/Clerk)
+- [ ] Add export functionality (CSV, PDF reports)
+- [ ] Multi-lingual support
+- [ ] Browser extension for on-the-fly validation
+
+## Acknowledgments
 
 Built with:
 
-1.Elasticsearch - For powerful hybrid search and aggregations
-2.Google Cloud Vertex AI - For embeddings, reranking, and Gemini models
-3.Next.js - For the amazing developer experience
+- Elasticsearch - For powerful hybrid search and aggregations
+- Google Cloud Vertex AI - For embeddings, reranking, and Gemini models
+- Next.js - For the amazing developer experience
+
+---
 
 Made for the AI Accelerate: Unlocking New Frontiers
+
 Find problems worth solving. Build startups people want.
 
 
